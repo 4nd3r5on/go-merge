@@ -59,7 +59,7 @@ Inserts new values only; does not overwrite existing values.
 **Behavior:**
 - **Maps:** Adds new keys only; recursively merges nested maps; skips existing keys
 - **Arrays:** Appends merge data to original array
-- **Primitives:** Keeps original if non-zero; uses merge data if original is zero
+- **Primitives:** Keeps original if exists
 - **Sparse Arrays:** Merges into existing maps at specified indices (recursively); replaces non-maps; appends if index doesn't exist
 
 **Example:**
@@ -80,7 +80,7 @@ Appends new data to existing data.
 **Behavior:**
 - **Maps:** Same as insert mode
 - **Arrays:** Appends merge data to original array
-- **Primitives:** Keeps original if non-zero; uses merge data if original is zero
+- **Primitives:** Keeps original if exists
 - **Sparse Arrays:** Appends all values from sparse map (ignores indices, treats as list of values)
 
 **Example:**
