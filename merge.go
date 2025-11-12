@@ -4,16 +4,16 @@ import (
 	"fmt"
 )
 
-type MergeMode int
+type Mode int
 
 const (
-	MergeModeFullReplace MergeMode = iota
-	MergeModePartialReplace
-	MergeModeInsert
-	MergeModeAppend
-	MergeModeUpdate
+	ModeFullReplace Mode = iota
+	ModePartialReplace
+	ModeInsert
+	ModeAppend
+	ModeUpdate
 
-	DefaultMergeMode = MergeModeInsert
+	DefaultMergeMode = ModeInsert
 )
 
 type Merger interface {
@@ -24,34 +24,53 @@ type Merger interface {
 	MergePrimitive(next Merger, orig, mergeData any) (any, error)
 }
 
-var MergeModeMap = map[string]MergeMode{
-	"replace":   MergeModeFullReplace,
-	"replace_p": MergeModePartialReplace,
-	"insert":    MergeModeInsert,
-	"append":    MergeModeAppend,
-	"update":    MergeModeUpdate,
+type ModeDataPair struct {
+	Mode Mode
+	Data any
 }
 
-var Mergers = map[MergeMode]Merger{
-	MergeModeFullReplace:    &ReplaceMerger{Mode: MergeModeFullReplace, Conf: ReplaceMode{Partial: false}},
-	MergeModePartialReplace: &ReplaceMerger{Mode: MergeModePartialReplace, Conf: ReplaceMode{Partial: true}},
-	MergeModeInsert:         &InsertMerger{Mode: MergeModeInsert},
-	MergeModeAppend:         &InsertMerger{Mode: MergeModeAppend, Conf: InsertMode{Append: true}},
-	MergeModeUpdate:         &UpdateMerger{Mode: MergeModeUpdate},
+var ModeMap = map[string]Mode{
+	"replace":   ModeFullReplace,
+	"replace_p": ModePartialReplace,
+	"insert":    ModeInsert,
+	"append":    ModeAppend,
+	"update":    ModeUpdate,
 }
 
-// MergeData recursively merges `mergeData` into `orig`.
+var Mergers = map[Mode]Merger{
+	ModeFullReplace:    &ReplaceMerger{Mode: ModeFullReplace, Conf: ReplaceMode{Partial: false}},
+	ModePartialReplace: &ReplaceMerger{Mode: ModePartialReplace, Conf: ReplaceMode{Partial: true}},
+	ModeInsert:         &InsertMerger{Mode: ModeInsert},
+	ModeAppend:         &InsertMerger{Mode: ModeAppend, Conf: InsertMode{Append: true}},
+	ModeUpdate:         &UpdateMerger{Mode: ModeUpdate},
+}
+
+func Bulk(orig any, mergeData ...ModeDataPair) (any, error) {
+	var err error
+	for _, mergePart := range mergeData {
+		orig, err = Data(mergePart.Mode, orig, mergePart.Data)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return orig, nil
+}
+
+// Data recursively merges `mergeData` into `orig`.
 // Returns the resulting merged structure or an error on invalid mode or type mismatch.
-func MergeData(mode MergeMode, orig, mergeData any) (any, error) {
+func Data(mode Mode, orig, mergeData any) (any, error) {
 	if merger, found := Mergers[mode]; found {
-		return useMerger(merger, orig, mergeData)
+		return UseMerger(merger, orig, mergeData)
 	}
 	return nil, fmt.Errorf("merger mode %q doesn't exist", mode)
 }
 
-func useMerger(m Merger, orig, mergeData any) (any, error) {
+func UseMerger(m Merger, orig, mergeData any) (any, error) {
 	switch o := orig.(type) {
 	case map[string]any:
+		if mergeData == nil {
+			return orig, nil
+		}
 		md, ok := mergeData.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("type mismatch: map[string]any vs %T", mergeData)
@@ -59,6 +78,9 @@ func useMerger(m Merger, orig, mergeData any) (any, error) {
 		return m.MergeMap(m, o, md)
 
 	case []any:
+		if mergeData == nil {
+			return orig, nil
+		}
 		switch md := mergeData.(type) {
 		case []any:
 			return m.MergeArray(m, o, md)
@@ -69,6 +91,9 @@ func useMerger(m Merger, orig, mergeData any) (any, error) {
 		}
 
 	case map[int]any:
+		if mergeData == nil {
+			return orig, nil
+		}
 		md, ok := mergeData.(map[int]any)
 		if !ok {
 			return nil, fmt.Errorf("type mismatch: map[int]any vs %T", mergeData)

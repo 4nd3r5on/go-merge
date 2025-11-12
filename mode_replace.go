@@ -5,12 +5,15 @@ type ReplaceMode struct {
 }
 
 type ReplaceMerger struct {
-	Mode MergeMode
+	Mode Mode
 	Conf ReplaceMode
 }
 
-// mergeMapCore merges maps based on ReplaceMode.
-func (m *ReplaceMerger) mergeMapCore(next Merger, orig, mergeData map[string]any, conf ReplaceMode) (map[string]any, error) {
+func replaceMergeMapCore[K comparable](
+	next Merger,
+	orig, mergeData map[K]any,
+	conf ReplaceMode,
+) (map[K]any, error) {
 	for k, v := range mergeData {
 		old, exists := orig[k]
 		if conf.Partial && !exists {
@@ -18,7 +21,7 @@ func (m *ReplaceMerger) mergeMapCore(next Merger, orig, mergeData map[string]any
 		}
 
 		if exists {
-			merged, err := useMerger(next, old, v)
+			merged, err := UseMerger(next, old, v)
 			if err != nil {
 				return nil, err
 			}
@@ -42,7 +45,7 @@ func (m *ReplaceMerger) mergeArrayCore(next Merger, orig, mergeData []any, conf 
 
 	for i := range limit {
 		if i < len(out) {
-			merged, err := useMerger(next, out[i], mergeData[i])
+			merged, err := UseMerger(next, out[i], mergeData[i])
 			if err != nil {
 				return nil, err
 			}
@@ -81,7 +84,7 @@ func (m *ReplaceMerger) mergeSparseArrayCore(next Merger, orig []any, mergeData 
 			if conf.Partial && i >= len(orig) {
 				break
 			}
-			merged, err := useMerger(next, out[i], v)
+			merged, err := UseMerger(next, out[i], v)
 			if err != nil {
 				return nil, err
 			}
@@ -93,29 +96,8 @@ func (m *ReplaceMerger) mergeSparseArrayCore(next Merger, orig []any, mergeData 
 	return out, nil
 }
 
-func (m *ReplaceMerger) mergeIntMapCore(next Merger, orig, mergeData map[int]any, conf ReplaceMode) (map[int]any, error) {
-	for k, v := range mergeData {
-		old, exists := orig[k]
-		if conf.Partial && !exists {
-			continue
-		}
-		if exists {
-			merged, err := useMerger(next, old, v)
-			if err != nil {
-				return nil, err
-			}
-			orig[k] = merged
-		} else {
-			orig[k] = v
-		}
-	}
-	return orig, nil
-}
-
-// ===== MERGER INTERFACE IMPLEMENTATION =====
-
 func (m *ReplaceMerger) MergeMap(next Merger, orig, mergeData map[string]any) (map[string]any, error) {
-	return m.mergeMapCore(next, orig, mergeData, m.Conf)
+	return replaceMergeMapCore(next, orig, mergeData, m.Conf)
 }
 
 func (m *ReplaceMerger) MergeArray(next Merger, orig, mergeData []any) ([]any, error) {
@@ -127,7 +109,7 @@ func (m *ReplaceMerger) MergeSparseArray(next Merger, orig []any, mergeData map[
 }
 
 func (m *ReplaceMerger) MergeIntMap(next Merger, orig, mergeData map[int]any) (map[int]any, error) {
-	return m.mergeIntMapCore(next, orig, mergeData, m.Conf)
+	return replaceMergeMapCore(next, orig, mergeData, m.Conf)
 }
 
 func (m *ReplaceMerger) MergePrimitive(_ Merger, _, mergeData any) (any, error) {

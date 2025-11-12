@@ -5,7 +5,7 @@ type InsertMode struct {
 }
 
 type InsertMerger struct {
-	Mode MergeMode
+	Mode Mode
 	Conf InsertMode
 }
 
@@ -22,7 +22,7 @@ func (m *InsertMerger) MergeMap(next Merger, orig, mergeData map[string]any) (ma
 			continue
 		}
 
-		merged, err := useMerger(next, old, v)
+		merged, err := UseMerger(next, old, v)
 		if err != nil {
 			return nil, err
 		}
@@ -47,7 +47,7 @@ func (m *InsertMerger) MergeArray(next Merger, orig, mergeData []any) ([]any, er
 
 		switch orig[i].(type) {
 		case map[string]any, map[int]any, []any:
-			merged, err := useMerger(next, orig[i], mergeData[i])
+			merged, err := UseMerger(next, orig[i], mergeData[i])
 			if err != nil {
 				return nil, err
 			}
@@ -71,7 +71,7 @@ func (m *InsertMerger) MergeSparseArray(next Merger, orig []any, mergeData map[i
 
 	for i, v := range mergeData {
 		if i < len(out) {
-			merged, err := useMerger(next, out[i], v)
+			merged, err := UseMerger(next, out[i], v)
 			if err != nil {
 				return nil, err
 			}
@@ -95,7 +95,7 @@ func (m *InsertMerger) MergeIntMap(next Merger, orig, mergeData map[int]any) (ma
 			continue
 		}
 
-		merged, err := useMerger(next, old, v)
+		merged, err := UseMerger(next, old, v)
 		if err != nil {
 			return nil, err
 		}

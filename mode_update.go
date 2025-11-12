@@ -1,16 +1,17 @@
 package merge
 
-type UpdateMerger struct{ Mode MergeMode }
+type UpdateMerger struct{ Mode Mode }
 
-func (m *UpdateMerger) MergeMap(next Merger, orig, mergeData map[string]any) (map[string]any, error) {
+func updateMergeMap[K comparable](
+	next Merger,
+	orig, mergeData map[K]any,
+) (map[K]any, error) {
 	for k, v := range mergeData {
 		old, exists := orig[k]
 		if !exists {
 			continue
 		}
-
-		// Recursive merge via next Merger
-		merged, err := useMerger(next, old, v)
+		merged, err := UseMerger(next, old, v)
 		if err != nil {
 			return nil, err
 		}
@@ -22,7 +23,6 @@ func (m *UpdateMerger) MergeMap(next Merger, orig, mergeData map[string]any) (ma
 func (m *UpdateMerger) MergeArray(_ Merger, orig, mergeData []any) ([]any, error) {
 	out := make([]any, len(orig))
 	copy(out, orig)
-
 	for _, v := range mergeData {
 		if !contains(out, v) {
 			out = append(out, v)
@@ -41,7 +41,7 @@ func (m *UpdateMerger) MergeSparseArray(next Merger, orig []any, mergeData map[i
 		}
 
 		old := out[i]
-		merged, err := useMerger(next, old, v)
+		merged, err := UseMerger(next, old, v)
 		if err != nil {
 			return nil, err
 		}
@@ -51,22 +51,18 @@ func (m *UpdateMerger) MergeSparseArray(next Merger, orig []any, mergeData map[i
 	return out, nil
 }
 
-func (m *UpdateMerger) MergeIntMap(next Merger, orig, mergeData map[int]any) (map[int]any, error) {
-	for k, v := range mergeData {
-		old, exists := orig[k]
-		if !exists {
-			continue
-		}
-		merged, err := useMerger(next, old, v)
-		if err != nil {
-			return nil, err
-		}
-		orig[k] = merged
+func (m *UpdateMerger) MergePrimitive(_ Merger, orig, mergeData any) (any, error) {
+	if isZeroValue(orig) {
+		return orig, nil
 	}
-	return orig, nil
+	return mergeData, nil
 }
 
-func (m *UpdateMerger) MergePrimitive(_ Merger, orig, mergeData any) (any, error) {
-	// Update only if old value exists (always true in recursion)
-	return mergeData, nil
+// refactored methods using the generic function
+func (m *UpdateMerger) MergeMap(next Merger, orig, mergeData map[string]any) (map[string]any, error) {
+	return updateMergeMap(next, orig, mergeData)
+}
+
+func (m *UpdateMerger) MergeIntMap(next Merger, orig, mergeData map[int]any) (map[int]any, error) {
+	return updateMergeMap(next, orig, mergeData)
 }

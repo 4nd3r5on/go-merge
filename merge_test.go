@@ -13,7 +13,7 @@ import (
 // TestCase represents a single merge operation test case
 type TestCase struct {
 	Name      string
-	Mode      merge.MergeMode
+	Mode      merge.Mode
 	Original  any
 	Merge     any
 	Expected  any
@@ -25,7 +25,7 @@ type TestCase struct {
 func RunTestCase(t *testing.T, tc TestCase) {
 	t.Helper()
 
-	result, err := merge.MergeData(tc.Mode, tc.Original, tc.Merge)
+	result, err := merge.Data(tc.Mode, tc.Original, tc.Merge)
 
 	if tc.ShouldErr {
 		if err == nil {
