@@ -10,15 +10,20 @@ In plans is to extend library to support more different data types and be more f
 
 ## Merge Modes
 
-### 1. MergeModeFullReplace (`"replace"`)
+### 1. ModeFullReplace (`"replace"`) and ModePartialReplace (`"replace_p"`)
 
 Completely replaces the original data with the merge data.
 
 **Behavior:**
-- **Maps:** Recursively merges nested maps; replaces non-map values
 - **Arrays:** Replaces entire array with merge data
 - **Primitives:** Replaces with new value
 - **Sparse Arrays:** Iterates through indices sequentially (0 to len-1); replaces values at existing indices; appends if index exceeds length; skips missing indices in sparse map
+
+If merge data is nil -- will replace it anyway (with nil value)
+
+
+**Behavior changes for replace_p (partial):**
+- **Arrays:** Replaces elements by index; preserves original length if merge is shorter; extends if merge is longer
 
 **Example:**
 ```go
@@ -31,17 +36,7 @@ mergeArray := []any{4, 5}
 // Result: [4, 5]
 ```
 
-### 2. MergeModePartialReplace (`"replace_p"`)
-
-Similar to full replace, but preserves array length when possible.
-
-**Behavior:**
-- **Maps:** Same as full replace
-- **Arrays:** Replaces elements by index; preserves original length if merge is shorter; extends if merge is longer
-- **Primitives:** Replaces with new value
-- **Sparse Arrays:** Replaces values at specified indices
-
-**Example:**
+**Example for replace_p:**
 ```go
 origArray := []any{1, 2, 3, 4}
 mergeArray := []any{10, 20}
@@ -52,7 +47,7 @@ mergeArray := []any{10, 20, 30}
 // Result: [10, 20, 30]
 ```
 
-### 3. MergeModeInsert (`"insert"`)
+### 3. ModeInsert (`"insert"`)
 
 Inserts new values only; does not overwrite existing values.
 
@@ -73,7 +68,7 @@ mergeArray := []any{3, 4}
 // Result: [1, 2, 3, 4]
 ```
 
-### 4. MergeModeAppend (`"append"`)
+### 4. ModeAppend (`"append"`)
 
 Appends new data to existing data.
 
@@ -90,7 +85,7 @@ mergeArray := []any{4, 5}
 // Result: [1, 2, 3, 4, 5]
 ```
 
-### 5. MergeModeUpdate (`"update"`)
+### 5. ModeUpdate (`"update"`)
 
 Updates existing values only; does not add new entries.
 
@@ -116,7 +111,7 @@ mergeArray := []any{2, 4}
 ### MergeData
 
 ```go
-func MergeData(mode MergeMode, orig, mergeData any) (any, error)
+func MergeData(mode Mode, orig, mergeData any) (any, error)
 ```
 
 Recursively merges `mergeData` into `orig` using the specified merge mode.
@@ -139,16 +134,16 @@ Recursively merges `mergeData` into `orig` using the specified merge mode.
 ### MergeMap
 
 ```go
-var MergeMap = map[string]MergeMode{
-    "replace":   MergeModeFullReplace,
-    "replace_p": MergeModePartialReplace,
-    "insert":    MergeModeInsert,
-    "append":    MergeModeAppend,
-    "update":    MergeModeUpdate,
+var MergeMap = map[string]Mode{
+    "replace":   ModeFullReplace,
+    "replace_p": ModePartialReplace,
+    "insert":    ModeInsert,
+    "append":    ModeAppend,
+    "update":    ModeUpdate,
 }
 ```
 
-Convenience map for converting string mode names to MergeMode constants.
+Convenience map for converting string mode names to Mode constants.
 
 ## Usage Examples
 
@@ -169,15 +164,15 @@ updates := map[string]any{
 }
 
 // Replace mode
-result, err := merge.MergeData(merge.MergeModeFullReplace, original, updates)
+result, err := merge.MergeData(merge.ModeFullReplace, original, updates)
 // Result: {"name": "John", "age": 31, "city": "NYC", "country": "USA"}
 
 // Update mode (only existing keys)
-result, err = merge.MergeData(merge.MergeModeUpdate, original, updates)
+result, err = merge.MergeData(merge.ModeUpdate, original, updates)
 // Result: {"name": "John", "age": 31, "city": "NYC"}
 
 // Insert mode (only new keys)
-result, err = merge.MergeData(merge.MergeModeInsert, original, updates)
+result, err = merge.MergeData(merge.ModeInsert, original, updates)
 // Result: {"name": "John", "age": 30, "city": "NYC", "country": "USA"}
 ```
 
@@ -201,7 +196,7 @@ updates := map[string]any{
     },
 }
 
-result, _ := merge.MergeData(merge.MergeModeFullReplace, original, updates)
+result, _ := merge.MergeData(merge.ModeFullReplace, original, updates)
 // Result: Nested user map is merged recursively
 ```
 
@@ -212,15 +207,15 @@ original := []any{1, 2, 3}
 additions := []any{4, 5}
 
 // Append mode
-result, _ := merge.MergeData(merge.MergeModeAppend, original, additions)
+result, _ := merge.MergeData(merge.ModeAppend, original, additions)
 // Result: [1, 2, 3, 4, 5]
 
 // Full replace mode
-result, _ = merge.MergeData(merge.MergeModeFullReplace, original, additions)
+result, _ = merge.MergeData(merge.ModeFullReplace, original, additions)
 // Result: [4, 5]
 
 // Partial replace mode
-result, _ = merge.MergeData(merge.MergeModePartialReplace, original, additions)
+result, _ = merge.MergeData(merge.ModePartialReplace, original, additions)
 // Result: [4, 5, 3]
 ```
 
@@ -234,7 +229,7 @@ sparseUpdates := map[int]any{
 }
 
 // Full replace mode
-result, _ := merge.MergeData(merge.MergeModeFullReplace, original, sparseUpdates)
+result, _ := merge.MergeData(merge.ModeFullReplace, original, sparseUpdates)
 // Result: ["a", "B", "c", "D"]
 
 // Insert mode - merges into existing maps
@@ -246,7 +241,7 @@ sparseInserts := map[int]any{
     0: map[string]any{"email": "alice@example.com"},
     2: map[string]any{"id": 3, "name": "Charlie"},
 }
-result, _ = merge.MergeData(merge.MergeModeInsert, original, sparseInserts)
+result, _ = merge.MergeData(merge.ModeInsert, original, sparseInserts)
 // Result: [
 //   {"id": 1, "name": "Alice", "email": "alice@example.com"},  // merged into existing map
 //   {"id": 2, "name": "Bob"},
@@ -258,7 +253,7 @@ sparseAppends := map[int]any{
     5: "E",
     10: "F",
 }
-result, _ = merge.MergeData(merge.MergeModeAppend, original, sparseAppends)
+result, _ = merge.MergeData(merge.ModeAppend, original, sparseAppends)
 // Result: ["a", "b", "c", "d", "E", "F"]
 ```
 
@@ -276,6 +271,7 @@ result, err := merge.MergeData(mode, original, updates)
 ### Valid Combinations
 
 - `map[string]any` ↔ `map[string]any`
+- `map[int]any` ↔ `map[int]any`
 - `[]any` ↔ `[]any`
 - `[]any` ↔ `map[int]any` (sparse array)
 - Primitives ↔ Primitives (same or compatible types)
@@ -299,30 +295,34 @@ The package includes special handling for zero values:
 - Boolean `false`
 - Numeric `0`, `0.0`
 
-**Behavior:**
-In Insert and Append modes, if the original value is a zero value, it will be replaced with the merge value.
-
-## Error Handling
-
-The function returns errors in the following cases:
-
-1. **Type Mismatch:** When orig and mergeData have incompatible types
-   ```go
-   // Error: type mismatch: map[string]any vs []interface {}
-   ```
-
-2. **Invalid Mode:** When using an invalid or unsupported merge mode
-   ```go
-   // Error: invalid mode for map: 99
-   ```
-
-Always check for errors when calling MergeData:
+**Usage**
 
 ```go
-result, err := merge.MergeData(mode, orig, mergeData)
+myMergeMode := len(merge.Mergers)
+merge.Mergers[myMergeMode] = MyMerger // anything that implements merger interface
+
+// Warning! Doesn't guarantee safety for the orig data
+result, err := merge.Data(mode, orig, mergeData)
 if err != nil {
     log.Fatal(err)
 }
+// Use bulk merge for sequentually merging changes in different modes
+merge.Bulk(
+    orig,
+    merge.ModeDataPair{
+		Mode: merge.ModeAppend,
+        Data: MDAppend
+    },
+    merge.ModeDataPair{
+		Mode: merge.ModeUpdate,
+        Data: MDUpd
+    },
+    merge.ModeDataPair{
+		Mode: merge.ModeAppend,
+        Data: MDAppend2
+    },
+    /* ... */
+)
 ```
 
 ## Best Practices

@@ -12,16 +12,17 @@ const (
 	ModeInsert
 	ModeAppend
 	ModeUpdate
+	DefaultMergersCount
 
 	DefaultMergeMode = ModeInsert
 )
 
 type Merger interface {
-	MergeMap(next Merger, orig, mergeData map[string]any) (map[string]any, error)
-	MergeArray(next Merger, orig, mergeData []any) ([]any, error)
-	MergeSparseArray(next Merger, orig []any, mergeData map[int]any) ([]any, error)
-	MergeIntMap(next Merger, orig, mergeData map[int]any) (map[int]any, error)
-	MergePrimitive(next Merger, orig, mergeData any) (any, error)
+	MergeMap(next Merger, path []string, orig, mergeData map[string]any) (map[string]any, error)
+	MergeArray(next Merger, path []string, orig, mergeData []any) ([]any, error)
+	MergeSparseArray(next Merger, path []string, orig []any, mergeData map[int]any) ([]any, error)
+	MergeIntMap(next Merger, path []string, orig, mergeData map[int]any) (map[int]any, error)
+	MergePrimitive(next Merger, path []string, orig, mergeData any) (any, error)
 }
 
 type ModeDataPair struct {
@@ -60,12 +61,28 @@ func Bulk(orig any, mergeData ...ModeDataPair) (any, error) {
 // Returns the resulting merged structure or an error on invalid mode or type mismatch.
 func Data(mode Mode, orig, mergeData any) (any, error) {
 	if merger, found := Mergers[mode]; found {
-		return UseMerger(merger, orig, mergeData)
+		return UseMerger(merger, nil, orig, mergeData)
 	}
 	return nil, fmt.Errorf("merger mode %q doesn't exist", mode)
 }
 
-func UseMerger(m Merger, orig, mergeData any) (any, error) {
+func formatPath(p []string) any {
+	if len(p) == 0 {
+		return "root"
+	}
+	return p
+}
+
+func typeMismatch(p []string, expected string, got any) error {
+	return fmt.Errorf("merge error at %v: expected %s, got %T",
+		formatPath(p), expected, got)
+}
+
+func UseMerger(m Merger, path []string, orig, mergeData any) (any, error) {
+	if path == nil {
+		path = make([]string, 0)
+	}
+
 	switch o := orig.(type) {
 	case map[string]any:
 		if mergeData == nil {
@@ -73,21 +90,36 @@ func UseMerger(m Merger, orig, mergeData any) (any, error) {
 		}
 		md, ok := mergeData.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("type mismatch: map[string]any vs %T", mergeData)
+			return nil, typeMismatch(path, "map[string]any", mergeData)
 		}
-		return m.MergeMap(m, o, md)
+		res, err := m.MergeMap(m, path, o, md)
+		if err != nil {
+			return nil, fmt.Errorf("map merge failed at %v: %w", formatPath(path), err)
+		}
+		return res, nil
 
 	case []any:
 		if mergeData == nil {
 			return orig, nil
 		}
+
 		switch md := mergeData.(type) {
 		case []any:
-			return m.MergeArray(m, o, md)
+			res, err := m.MergeArray(m, path, o, md)
+			if err != nil {
+				return nil, fmt.Errorf("array merge failed at %v: %w", formatPath(path), err)
+			}
+			return res, nil
+
 		case map[int]any:
-			return m.MergeSparseArray(m, o, md)
+			res, err := m.MergeSparseArray(m, path, o, md)
+			if err != nil {
+				return nil, fmt.Errorf("sparse array merge failed at %v: %w", formatPath(path), err)
+			}
+			return res, nil
+
 		default:
-			return nil, fmt.Errorf("type mismatch: []any vs %T", mergeData)
+			return nil, typeMismatch(path, "[]any or map[int]any", mergeData)
 		}
 
 	case map[int]any:
@@ -96,11 +128,31 @@ func UseMerger(m Merger, orig, mergeData any) (any, error) {
 		}
 		md, ok := mergeData.(map[int]any)
 		if !ok {
-			return nil, fmt.Errorf("type mismatch: map[int]any vs %T", mergeData)
+			return nil, typeMismatch(path, "map[int]any", mergeData)
 		}
-		return m.MergeIntMap(m, o, md)
+		res, err := m.MergeIntMap(m, path, o, md)
+		if err != nil {
+			return nil, fmt.Errorf("int map merge failed at %v: %w", formatPath(path), err)
+		}
+		return res, nil
 
 	default:
-		return m.MergePrimitive(m, orig, mergeData)
+		res, err := m.MergePrimitive(m, path, orig, mergeData)
+		if err != nil {
+			return nil, fmt.Errorf("primitive merge failed at %v: %w", formatPath(path), err)
+		}
+		return res, nil
 	}
+}
+
+func init() {
+	orig := map[string]any{}
+
+	Bulk(orig,
+		ModeDataPair{
+			Mode: ModeAppend,
+		},
+		ModeDataPair{},
+		ModeDataPair{},
+	)
 }

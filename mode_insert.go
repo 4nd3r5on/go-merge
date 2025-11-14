@@ -1,5 +1,7 @@
 package merge
 
+import "fmt"
+
 type InsertMode struct {
 	Append bool
 }
@@ -9,29 +11,36 @@ type InsertMerger struct {
 	Conf InsertMode
 }
 
-func (m *InsertMerger) MergeMap(next Merger, orig, mergeData map[string]any) (map[string]any, error) {
+func (m *InsertMerger) MergeMap(next Merger, path []string, orig, mergeData map[string]any) (map[string]any, error) {
 	if orig == nil {
 		return mergeData, nil
 	}
 
 	for k, v := range mergeData {
 		old, exists := orig[k]
-
 		if !exists {
 			orig[k] = v
 			continue
 		}
 
-		merged, err := UseMerger(next, old, v)
+		// mutate path
+		path = append(path, k)
+
+		merged, err := UseMerger(next, path, old, v)
+
+		// restore
+		path = path[:len(path)-1]
+
 		if err != nil {
 			return nil, err
 		}
+
 		orig[k] = merged
 	}
 	return orig, nil
 }
 
-func (m *InsertMerger) MergeArray(next Merger, orig, mergeData []any) ([]any, error) {
+func (m *InsertMerger) MergeArray(next Merger, path []string, orig, mergeData []any) ([]any, error) {
 	out := make([]any, len(orig))
 	copy(out, orig)
 
@@ -47,11 +56,17 @@ func (m *InsertMerger) MergeArray(next Merger, orig, mergeData []any) ([]any, er
 
 		switch orig[i].(type) {
 		case map[string]any, map[int]any, []any:
-			merged, err := UseMerger(next, orig[i], mergeData[i])
+			path = append(path, fmt.Sprintf("%v", i))
+
+			merged, err := UseMerger(next, path, orig[i], mergeData[i])
+
+			path = path[:len(path)-1]
+
 			if err != nil {
 				return nil, err
 			}
 			out[i] = merged
+
 		default:
 			out = append(out, mergeData[i])
 		}
@@ -59,7 +74,7 @@ func (m *InsertMerger) MergeArray(next Merger, orig, mergeData []any) ([]any, er
 	return out, nil
 }
 
-func (m *InsertMerger) MergeSparseArray(next Merger, orig []any, mergeData map[int]any) ([]any, error) {
+func (m *InsertMerger) MergeSparseArray(next Merger, path []string, orig []any, mergeData map[int]any) ([]any, error) {
 	out := make([]any, len(orig))
 	copy(out, orig)
 
@@ -71,15 +86,22 @@ func (m *InsertMerger) MergeSparseArray(next Merger, orig []any, mergeData map[i
 
 	for i, v := range mergeData {
 		if i < len(out) {
-			merged, err := UseMerger(next, out[i], v)
+			path = append(path, fmt.Sprintf("%v", i))
+
+			merged, err := UseMerger(next, path, out[i], v)
+
+			path = path[:len(path)-1]
+
 			if err != nil {
 				return nil, err
 			}
+
 			out[i] = merged
 		} else {
 			leftToMerge[i] = v
 		}
 	}
+
 	if len(leftToMerge) == 0 {
 		return out, nil
 	}
@@ -87,7 +109,7 @@ func (m *InsertMerger) MergeSparseArray(next Merger, orig []any, mergeData map[i
 	return append(out, sparseArrayToArray(leftToMerge)...), nil
 }
 
-func (m *InsertMerger) MergeIntMap(next Merger, orig, mergeData map[int]any) (map[int]any, error) {
+func (m *InsertMerger) MergeIntMap(next Merger, path []string, orig, mergeData map[int]any) (map[int]any, error) {
 	for k, v := range mergeData {
 		old, exists := orig[k]
 		if !exists {
@@ -95,15 +117,21 @@ func (m *InsertMerger) MergeIntMap(next Merger, orig, mergeData map[int]any) (ma
 			continue
 		}
 
-		merged, err := UseMerger(next, old, v)
+		path = append(path, fmt.Sprintf("%v", k))
+
+		merged, err := UseMerger(next, path, old, v)
+
+		path = path[:len(path)-1]
+
 		if err != nil {
 			return nil, err
 		}
+
 		orig[k] = merged
 	}
 	return orig, nil
 }
 
-func (m *InsertMerger) MergePrimitive(_ Merger, orig, mergeData any) (any, error) {
+func (m *InsertMerger) MergePrimitive(_ Merger, _ []string, orig, mergeData any) (any, error) {
 	return nonZero(orig, mergeData), nil
 }
