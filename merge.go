@@ -7,7 +7,8 @@ import (
 type Mode int
 
 const (
-	ModeFullReplace Mode = iota
+	ModeUnknown Mode = iota
+	ModeFullReplace
 	ModePartialReplace
 	ModeInsert
 	ModeAppend
@@ -39,6 +40,7 @@ var ModeMap = map[string]Mode{
 }
 
 var Mergers = map[Mode]Merger{
+	ModeUnknown:        &UnknownMerger{},
 	ModeFullReplace:    &ReplaceMerger{Mode: ModeFullReplace, Conf: ReplaceMode{Partial: false}},
 	ModePartialReplace: &ReplaceMerger{Mode: ModePartialReplace, Conf: ReplaceMode{Partial: true}},
 	ModeInsert:         &InsertMerger{Mode: ModeInsert},
